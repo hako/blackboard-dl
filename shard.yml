@@ -1,0 +1,16 @@
+name: blackboard-dl
+version: 0.1.0
+
+authors:
+  - Wesley Hill <wesley@hakobaito.co.uk>
+
+dependencies:
+  daemonize:
+    github: DougEverly/daemonize.cr
+
+development_dependencies:
+  webmock:
+    github: manastech/webmock.cr
+    branch: master
+
+license: MIT
