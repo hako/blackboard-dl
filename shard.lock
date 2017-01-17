@@ -1,0 +1,10 @@
+version: 1.0
+shards:
+  daemonize:
+    github: DougEverly/daemonize.cr
+    commit: 03d7da27fe76ee6b77d47a66984969a308a42027
+
+  webmock:
+    github: manastech/webmock.cr
+    commit: 8c1e360c80479f2708975334061c417332cbe89d
+

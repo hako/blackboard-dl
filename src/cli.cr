@@ -4,8 +4,25 @@ require "option_parser"
 require "readline"
 require "uri"
 require "daemonize"
+require "colorize"
+require "json"
 
 module BlackBoard::Dl
+  # College JSON structure.
+  private class College
+    JSON.mapping(
+      name: String,
+      id: String,
+      url: String,
+      client_id: String,
+      ssl: String,
+      host: String,
+    )
+  end
+
+  # Selected college.
+  @@college = {} of String => String
+
   # Runs the blackboard-dl commandline utility.
   def self.run
     bb_username = Nil
@@ -20,12 +37,28 @@ module BlackBoard::Dl
       parser.on("-h", "--help", "Show this help") { puts parser; exit(0) }
       parser.on("-v", "--version", "Show program version") { puts BlackBoard::Dl::VERSION }
     end
+    puts "Blackboard course downloader " + "v#{VERSION}".colorize.green.to_s + " - [c] 2017 Wesley Hill"
+    load_selected_college
 
-    puts "Blackboard course downloader - [c] 2016 Wesley Hill"
-    # Present a prompt to the student to enter in their course details instead of the argument parser.
+    # Only search if there is no selected college.
+    if @@college.empty?
+      search_college
+    end
+
+    # 'Login screen'.
+    secure_type = if @@college["ssl"] == "true"
+                    "[secure ✔]".colorize.mode(:dim).to_s
+                  else
+                    "[insecure ✖]".colorize.red.mode(:dim).to_s
+                  end
+
+    puts "\n#{@@college["name"]}".colorize.green.mode(:bold).to_s + " #{secure_type}"
+    puts "#{@@college["host"]}".colorize.green
+    # Present a prompt to the student to enter in their course details instead of using the argument parser.
     if (bb_username && bb_password) == Nil
-      username = Readline.readline("[?] Blackboard username: ", add_history = true)
-      print "[?] Blackboard password (hidden): "
+      puts "-Login--------------------------".colorize.green.mode(:dim)
+      username = Readline.readline("[?] Blackboard username: ".colorize.green.to_s, add_history = true)
+      print "[?] Blackboard password (hidden): ".colorize.green
       password = STDIN.noecho &.gets.to_s.try &.chomp
       print "\n"
 
@@ -35,31 +68,39 @@ module BlackBoard::Dl
 
     if daemon == true
       # Daemonize process.
-      puts "Running in the background on pid: #{Process.pid}"
+      puts "Running in the background on pid: #{Process.pid}".colorize.magenta.mode(:bold).to_s
       Daemonize.daemonize
       now = Time.now
       diff = now.at_end_of_hour - now
       until now == now.at_end_of_hour
         puts "Checking for an update in #{diff.minutes} minute(s)"
         sleep diff.duration
-        download(bb_username, bb_password)
+        download(@@college["url"], bb_username, bb_password)
         now = Time.now
       end
     else
-      download(bb_username, bb_password)
+      download(@@college["url"], bb_username, bb_password)
     end
   end
 
-  def self.download(bb_username, bb_password)
+  def self.download(bb_url, bb_username, bb_password)
+    print "\r[+] Logging in...".colorize.green.mode(:dim)
+    client = BlackBoard::Dl::Client.new(bb_url.to_s, bb_username.to_s, bb_password.to_s)
     # Login.
-    client = BlackBoard::Dl::Client.new(bb_username.to_s, bb_password.to_s)
-    status = client.login
+    begin
+      status = client.login
+    rescue
+      puts "\r[x] Unable to login try again later...".colorize.red
+      exit(1)
+    end
     if status != "OK"
-      puts "Login incorrect, please check your credentials and try again."
+      puts "Login incorrect, please check your credentials and college and try again.".colorize.red
+      puts ("Hint: The college you selected was: %s") % ("#{@@college["name"]}".colorize.green.mode(:bold).to_s)
       exit(1)
     else
       print "\n"
-      puts ("[+] Successfully logged into Blackboard as %s") % (bb_username.to_s)
+      #puts ("[+] Successfully logged into Blackboard as" + " %s!".colorize.green.mode(:bold).to_s) % 
+(bb_username.to_s)
     end
 
     # Fetch enrolled courses.
@@ -68,7 +109,7 @@ module BlackBoard::Dl
       # Get the current path and underscore the path.
       name = course["name"].to_s.split(" -")[0]
       path = "#{Dir.current}/#{name.gsub(" ", '_')}"
-      puts "[Course] %s" % name
+      puts "[Course] %s".colorize.cyan.mode(:bold).to_s % name
       # Create the course folder if it doesn't exist.
       if !Dir.exists?(path)
         puts " [+] %s folder does not exist, creating..." % name
@@ -80,7 +121,94 @@ module BlackBoard::Dl
       client.get_course_data(name, course["id"].to_s)
       puts ""
     end
-    puts "[+] Finished downloading courses for #{bb_username}"
+    puts "[+] Finished downloading courses for #{bb_username}".colorize.green.mode(:bold).to_s
+  end
+
+  # Check for yes or no.
+  def self.check_y_n(choice)
+    exists = false
+    # Check for Yeses.
+    ["Y", "y", "Yes", "YES", "yes"].each do |y|
+      if choice == y
+        exists = true
+        choice = "Y"
+        break
+      end
+    end
+    # Check for Nos.
+    ["N", "n", "No", "NO", "no"].each do |n|
+      if choice == n
+        exists = true
+        choice = "N"
+        break
+      end
+    end
+    # If the string exists, return Y/N.
+    if exists == true
+      return choice
+    end
+  end
+
+  # Load selected college if it exists.
+  def self.load_selected_college
+    begin
+      college = College.from_json(File.open("./selected_college.json", "r"))
+      college_hash = {
+        "name"      => college.name,
+        "id"        => college.id,
+        "url"       => college.url,
+        "client_id" => college.client_id,
+        "ssl"       => college.ssl,
+        "host"      => college.host,
+      }
+      @@college = college_hash
+    rescue
+    end
+  end
+
+  # Save selected college.
+  def self.save_selected_college
+    File.open("./selected_college.json", "wb") do |c|
+      c << @@college.to_json
+    end
+  end
+
+  # Search for the students school.
+  def self.search_college
+    selected = false
+    until selected == true
+      query = Readline.readline("[!] Search for your college/university: ".colorize.green.to_s, add_history = true)
+      print "\rSearching...".colorize.cyan.mode(:bold)
+      # Search colleges.
+      colleges = BlackBoard::Dl::Client.search_colleges query.to_s
+      # Check empty college.
+      if colleges.empty?
+        print "\rNo Results found!".colorize.red
+        exit(1)
+      end
+      # Show college results.
+      print "\r#{colleges.size} result(s) for \"#{query}\"\n".colorize.green.mode(:bold)
+      colleges.each_with_index do |college, i|
+        puts "[#{i}]".colorize.yellow.to_s + " #{college["name"]}"
+      end
+      idx = Readline.readline("[?] What " + "number".colorize.yellow.to_s + " is your college/university?: ".colorize.green.to_s, add_history = true)
+      # Error handling...
+      begin
+        @@college = colleges.at(idx.to_s.to_i)
+        selected = true
+      rescue
+        puts "[x] That didn't work, try again...".colorize.red
+      end
+    end
+
+    # Choice to save their college.
+    choice = check_y_n(Readline.readline("[?] Would you like to save your selected college?: ".colorize.green.to_s, add_history = true))
+
+    # Save only if they user pressed Y.
+    if choice == "Y"
+      self.save_selected_college
+      puts "Selected college " + "\"#{@@college["name"]}\"".colorize.green.to_s + " saved in " + "\"selected_college.json\"".colorize.green.to_s + "."
+    end
   end
 end
 

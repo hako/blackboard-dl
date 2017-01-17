@@ -1,24 +1,87 @@
 require "xml"
 require "http/client"
+require "http/params"
 
 module BlackBoard::Dl
   # Constants
-  HOST         = "https://blackboard.lincoln.ac.uk"
+  SEARCH_HOST  = "https://mlcs.medu.com/api/b2_registration/match_schools/?"
   LOGIN        = "/webapps/Bb-mobile-bb_bb60/sslUserLogin?v=2&f=xml&ver=4.1.2"
   COURSE       = "/webapps/Bb-mobile-bb_bb60/courseMap?v=1&f=xml&ver=4.1.2"
   COURSES_PATH = "/webapps/Bb-mobile-bb_bb60/enrollments?v=1&f=xml&ver=4.1.2&course_type=ALL&include_grades=false"
 
-  HEADERS = HTTP::Headers{"User-Agent" => "Mobile Learn/3333 CFNetwork/758.0.2 Darwin/16.0.0", "Accept-Language" => "en-gb"}
-  COOKIES = {"s_session_id" => "", "session_id" => "", "web_client_cache_guid" => ""}
+  HEADERS    = HTTP::Headers{"User-Agent" => "Mobile Learn/3333 CFNetwork/758.0.2 Darwin/16.0.0", "Accept-Language" => "en-gb"}
+  COOKIES    = {"s_session_id" => "", "session_id" => "", "web_client_cache_guid" => ""}
+  BB_VERSION = "4.1.2"
 
   class Client
-    def initialize(@username : String, @password : String)
+    def initialize(@host : String, @username : String, @password : String)
       self
+    end
+
+    # Gets a list of colleges on the Blackboard system.
+    def self.search_colleges(q : String)
+      client = HTTP::Client.new URI.parse(SEARCH_HOST)
+      param_data = {
+        "v"               => "1",
+        "f"               => "xml",
+        "ver"             => BB_VERSION,
+        "q"               => q,
+        "language"        => "en-GB",
+        "platform"        => "ios",
+        "device_name"     => "iPhone",
+        "carrier_code"    => "12456",
+        "carrier_name"    => "BT",
+        "registration_id" => "(null)",
+      }
+
+      params = HTTP::Params.from_hash(param_data)
+      res = client.get(SEARCH_HOST + params, headers: HEADERS)
+      client.close
+      response = XML.parse(res.body.to_s).first_element_child.as(XML::Node)
+
+      # Create an array of colleges.
+      colleges = [{} of String => String]
+
+      # Parse the response body and select the first element, and only select it's childrens elements.
+      # (Ignore text nodes)
+      XML.parse(res.body.to_s).first_element_child.as(XML::Node).children.select(&.element?).each do |child|
+        # Create a hash of colleges.
+        college = {} of String => String
+
+        # Go through each child node only selecting it's childrens elements.
+        # (Ignoring text nodes)
+        child.children.select(&.element?).each do |c|
+          # Set college attributes.
+          if c.name == "name"
+            college["name"] = c.text
+          end
+          if c.name == "b2_url"
+            college["url"] = c.text
+          end
+          if c.name == "can_has_ssl_login"
+            college["ssl"] = c.text
+          end
+          if c.name == "display_lms_host"
+            college["host"] = c.text
+          end
+          if c.name == "id"
+            college["id"] = c.text
+          end
+          if c.name == "client_id"
+            college["client_id"] = c.text
+          end
+        end
+        # Append college.
+        colleges << college
+      end
+      # Remove the first empty hash.
+      colleges.shift
+      colleges
     end
 
     # Signs the user into Blackboard.
     def login
-      client = HTTP::Client.new URI.parse(HOST)
+      client = HTTP::Client.new URI.parse(@host)
       data = {"username" => @username, "password" => @password}
       res = client.post_form(LOGIN, headers: HEADERS, form: data)
       client.close
@@ -37,7 +100,7 @@ module BlackBoard::Dl
     # Gets the students courses.
     def get_courses
       course_ids = [] of Hash(String, String | Nil)
-      client = HTTP::Client.new URI.parse(HOST)
+      client = HTTP::Client.new URI.parse(@host)
 
       # Send Cookie header.
       HEADERS["Cookie"] = ("web_client_cache_guid=#{COOKIES["web_client_cache_guid"]}; session_id=#{COOKIES["session_id"]}; s_session_id=#{COOKIES["s_session_id"]}")
@@ -58,9 +121,9 @@ module BlackBoard::Dl
 
     # Gets course data for a given course.
     def get_course_data(course_name : String, course_id : String)
-      client = HTTP::Client.new URI.parse(HOST)
+      client = HTTP::Client.new URI.parse(@host)
 
-      # Send Cookie header.
+      # Send 'Cookie' header.
       HEADERS["Cookie"] = ("web_client_cache_guid=#{COOKIES["web_client_cache_guid"]}; session_id=#{COOKIES["session_id"]}; s_session_id=#{COOKIES["s_session_id"]}")
       res = client.post(COURSE + "&course_id=" + course_id, headers: HEADERS)
       response = XML.parse(res.body.to_s).first_element_child.as(XML::Node)
@@ -80,7 +143,7 @@ module BlackBoard::Dl
       begin
         download({path_name, materials, path})
       rescue
-        puts "  [-] Unable to download #{materials["name"]}"
+        puts "  [-] Unable to download #{materials["name"]}".colorize.red
       end
     end
 
@@ -100,7 +163,7 @@ module BlackBoard::Dl
           child.children[3].children[1].children.each do |inner|
             if inner.type == XML::Type::ELEMENT_NODE
               if inner.name == "attachments"
-                puts "  [+] #{course_name} lecture avaliable for #{week_name}."
+                puts "  [+] #{course_name} lecture avaliable for #{week_name}.".colorize.green.to_s
                 # we need to go deeper.
                 inner.children.each do |material|
                   if material.name == "attachment"
@@ -119,7 +182,7 @@ module BlackBoard::Dl
 
           # Lectures for this week are not available then...
           if available == false
-            puts " [-] #{course_name} lecture for #{week_name} is not available yet."
+            puts " [-] #{course_name} lecture for #{week_name} is not available yet.".colorize.red
           end
         end
       end
@@ -154,12 +217,12 @@ module BlackBoard::Dl
             end
             # Workshops for this week are not available then...
             if workshop_available == false
-              puts " [-] #{course_name} workshop for #{week_name} is not available yet."
+              puts " [-] #{course_name} workshop for #{week_name} is not available yet.".colorize.red
             end
           end
         end
       rescue
-        puts " [-] No workshop material found. skipping..."
+        puts " [-] No workshop material found. skipping...".colorize.green.mode(:dim).to_s
       end
     end
 
@@ -179,9 +242,9 @@ module BlackBoard::Dl
         Dir.mkdir(dl_path)
       end
       if !File.exists?(final_path)
-        puts "    [+] Downloading material for #{folder_friendly_name}..."
+        puts "    [+] Downloading material for #{folder_friendly_name}...".colorize.cyan.mode(:bold).to_s
         # Download attachment.
-        client = HTTP::Client.new URI.parse(HOST)
+        client = HTTP::Client.new URI.parse(@host)
         client.close
 
         HEADERS["Cookie"] = ("web_client_cache_guid=#{COOKIES["web_client_cache_guid"]}; session_id=#{COOKIES["session_id"]}; s_session_id=#{COOKIES["s_session_id"]}")
@@ -211,7 +274,7 @@ module BlackBoard::Dl
           f << attachment.body
         end
       else
-        puts "  [-] #{filename} exists. skipping..."
+        puts "  [-] #{filename} exists. skipping...".colorize.green.mode(:dim).to_s
       end
     end
   end
