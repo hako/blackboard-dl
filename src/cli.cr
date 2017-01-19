@@ -99,7 +99,7 @@ module BlackBoard::Dl
       exit(1)
     else
       print "\n"
-      #puts ("[+] Successfully logged into Blackboard as" + " %s!".colorize.green.mode(:bold).to_s) % 
+      puts ("[+] Successfully logged into Blackboard as" + " %s!".colorize.green.mode(:bold).to_s) % 
 (bb_username.to_s)
     end
 
