@@ -18,7 +18,7 @@ module BlackBoard::Dl
       self
     end
 
-    # Gets a list of colleges on the Blackboard system.
+    # Gets a list of available colleges on the Blackboard system.
     def self.search_colleges(q : String)
       client = HTTP::Client.new URI.parse(SEARCH_HOST)
       param_data = {
@@ -79,7 +79,7 @@ module BlackBoard::Dl
       colleges
     end
 
-    # Signs the user into Blackboard.
+    # Signs the student into Blackboard.
     def login
       client = HTTP::Client.new URI.parse(@host)
       data = {"username" => @username, "password" => @password}
@@ -92,7 +92,10 @@ module BlackBoard::Dl
         # Save relevant cookies...
         COOKIES["s_session_id"] = res.cookies["s_session_id"].value
         COOKIES["session_id"] = res.cookies["session_id"].value
-        COOKIES["web_client_cache_guid"] = res.cookies["web_client_cache_guid"].value
+
+        if res.cookies.has_key?("web_client_cache_guid")
+          COOKIES["web_client_cache_guid"] = res.cookies["web_client_cache_guid"].value
+        end
       end
       return status
     end
@@ -125,6 +128,8 @@ module BlackBoard::Dl
 
       # Send 'Cookie' header.
       HEADERS["Cookie"] = ("web_client_cache_guid=#{COOKIES["web_client_cache_guid"]}; session_id=#{COOKIES["session_id"]}; s_session_id=#{COOKIES["s_session_id"]}")
+
+      # Get course data and start downloading attachments.
       res = client.post(COURSE + "&course_id=" + course_id, headers: HEADERS)
       response = XML.parse(res.body.to_s).first_element_child.as(XML::Node)
       status = response["status"]
@@ -188,7 +193,6 @@ module BlackBoard::Dl
       end
 
       # Workshops
-
       begin
         parsed_data.children[1].children[7].children.each do |child|
           child.children.each do |c|
@@ -262,7 +266,6 @@ module BlackBoard::Dl
         #
         # 2nd Location. (Should be the attachment)
         location3 = URI.parse(location2.headers["Location"].to_s)
-
         client3 = HTTP::Client.new location3
         attachment = client3.get(location3.path.to_s, headers: HEADERS)
         client3.close

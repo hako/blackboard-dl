@@ -20,11 +20,12 @@ module BlackBoard::Dl
     )
   end
 
-  # Selected college.
+  # Selected college & current dir (for daemon)
   @@college = {} of String => String
 
   # Runs the blackboard-dl commandline utility.
   def self.run
+    banner = "Blackboard course downloader " + "v#{VERSION}".colorize.green.to_s + " - [c] 2017 Wesley Hill"
     bb_username = Nil
     bb_password = Nil
     daemon = false
@@ -37,7 +38,7 @@ module BlackBoard::Dl
       parser.on("-h", "--help", "Show this help") { puts parser; exit(0) }
       parser.on("-v", "--version", "Show program version") { puts BlackBoard::Dl::VERSION }
     end
-    puts "Blackboard course downloader " + "v#{VERSION}".colorize.green.to_s + " - [c] 2017 Wesley Hill"
+    puts banner
     load_selected_college
 
     # Only search if there is no selected college.
@@ -54,6 +55,7 @@ module BlackBoard::Dl
 
     puts "\n#{@@college["name"]}".colorize.green.mode(:bold).to_s + " #{secure_type}"
     puts "#{@@college["host"]}".colorize.green
+
     # Present a prompt to the student to enter in their course details instead of using the argument parser.
     if (bb_username && bb_password) == Nil
       puts "-Login--------------------------".colorize.green.mode(:dim)
@@ -66,31 +68,53 @@ module BlackBoard::Dl
       bb_password = password
     end
 
+    # Download as normal or as a daemon.
     if daemon == true
-      # Daemonize process.
-      puts "Running in the background on pid: #{Process.pid}".colorize.magenta.mode(:bold).to_s
-      Daemonize.daemonize
-      now = Time.now
-      diff = now.at_end_of_hour - now
-      until now == now.at_end_of_hour
-        puts "Checking for an update in #{diff.minutes} minute(s)"
-        sleep diff.duration
-        download(@@college["url"], bb_username, bb_password)
-        now = Time.now
-      end
+      download_as_daemon(bb_username, bb_password)
     else
       download(@@college["url"], bb_username, bb_password)
     end
   end
 
+  # Download course material as a daemon with a username & password.
+  def self.download_as_daemon(bb_username, bb_password)
+    # Daemonize process.
+    puts "Running daemon in the background on pid: #{Process.pid + 2}".colorize.magenta.mode(:bold).to_s
+    stdout_log = Dir.current + "/bbdl_output.log"
+    stderr_log = Dir.current + "/bbdl_errors.log"
+
+    puts "Daemon log output: #{stdout_log}".colorize.green.to_s
+    puts "Daemon error output: #{stderr_log}".colorize.red.to_s
+
+    Daemonize.daemonize(stdout: stdout_log, stderr: stderr_log, dir: Dir.current)
+
+    now = Time.now
+    puts ""
+    puts "-Blackboard course downloader daemon ---------------[#{now.to_s("%T")}]"
+    diff = now.at_end_of_hour - now
+
+    # Loop every n minutes.
+    until now == now.at_end_of_hour
+      puts "Checking for new course material in #{diff.minutes} minute(s)"
+      sleep diff.duration
+      puts "Checking new courses at #{Time.now.to_s("%T")}"
+      download(@@college["url"], bb_username, bb_password)
+      now = Time.now
+      diff = now.at_end_of_hour - now
+    end
+  end
+
+  # Download courses material with a college url, username & password.
   def self.download(bb_url, bb_username, bb_password)
+    # Make sure we download to this directory.
     print "\r[+] Logging in...".colorize.green.mode(:dim)
     client = BlackBoard::Dl::Client.new(bb_url.to_s, bb_username.to_s, bb_password.to_s)
     # Login.
     begin
       status = client.login
-    rescue
+    rescue error
       puts "\r[x] Unable to login try again later...".colorize.red
+      puts "[!] Reason: #{error}".colorize.red
       exit(1)
     end
     if status != "OK"
@@ -99,8 +123,7 @@ module BlackBoard::Dl
       exit(1)
     else
       print "\n"
-      puts ("[+] Successfully logged into Blackboard as" + " %s!".colorize.green.mode(:bold).to_s) % 
-(bb_username.to_s)
+      puts ("[+] Successfully logged into Blackboard as" + " %s!".colorize.green.mode(:bold).to_s) % (bb_username.to_s)
     end
 
     # Fetch enrolled courses.
@@ -118,7 +141,12 @@ module BlackBoard::Dl
         puts " [+] %s folder exists, continuing..." % name
       end
       # Start to download the attachment.
-      client.get_course_data(name, course["id"].to_s)
+      begin
+        client.get_course_data(name, course["id"].to_s)
+      rescue error
+        puts "[!] Reason: #{error}".colorize.red
+        exit(1)
+      end
       puts ""
     end
     puts "[+] Finished downloading courses for #{bb_username}".colorize.green.mode(:bold).to_s
@@ -173,25 +201,30 @@ module BlackBoard::Dl
     end
   end
 
-  # Search for the students school.
+  # Search for the students college.
   def self.search_college
+    # This is a prompt for students to search and select their college details. (assuming they use BlackBoard)
+    # Only exit if they have selected a course.
     selected = false
     until selected == true
       query = Readline.readline("[!] Search for your college/university: ".colorize.green.to_s, add_history = true)
       print "\rSearching...".colorize.cyan.mode(:bold)
       # Search colleges.
       colleges = BlackBoard::Dl::Client.search_colleges query.to_s
+
       # Check empty college.
       if colleges.empty?
         print "\rNo Results found!".colorize.red
         exit(1)
       end
+
       # Show college results.
       print "\r#{colleges.size} result(s) for \"#{query}\"\n".colorize.green.mode(:bold)
       colleges.each_with_index do |college, i|
         puts "[#{i}]".colorize.yellow.to_s + " #{college["name"]}"
       end
       idx = Readline.readline("[?] What " + "number".colorize.yellow.to_s + " is your college/university?: ".colorize.green.to_s, add_history = true)
+
       # Error handling...
       begin
         @@college = colleges.at(idx.to_s.to_i)
@@ -204,7 +237,7 @@ module BlackBoard::Dl
     # Choice to save their college.
     choice = check_y_n(Readline.readline("[?] Would you like to save your selected college?: ".colorize.green.to_s, add_history = true))
 
-    # Save only if they user pressed Y.
+    # Save only if the student pressed Y.
     if choice == "Y"
       self.save_selected_college
       puts "Selected college " + "\"#{@@college["name"]}\"".colorize.green.to_s + " saved in " + "\"selected_college.json\"".colorize.green.to_s + "."
