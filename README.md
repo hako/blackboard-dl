@@ -1,4 +1,4 @@
-# blackboard-dl
+# blackboard-dl [![Build Status](https://travis-ci.org/hako/blackboard-dl.svg?branch=master)](https://travis-ci.org/hako/blackboard-dl)
 
 A small tool to download lectures and workshops automagically because i'm too lazy to sign in to BlackBoard.
 
