@@ -5,7 +5,7 @@ A small tool to download lectures and workshops automagically because i'm too la
 ![](demo.gif)
 
 ## Requirements
-+ [Crystal](https://crystal-lang.org) 
++ [Crystal 0.23+](https://crystal-lang.org) 
     +   [Installation Mac/Linux](https://crystal-lang.org) (Sorry Windows users!)
 + Your university must have BlackBoard.
 
@@ -13,7 +13,7 @@ A small tool to download lectures and workshops automagically because i'm too la
 
 ```
   git clone https://github.com/hako/blackboard-dl
-  shards install
+  crystal dep or shards install
   crystal build src/blackboard-dl.cr
   ./blackboard-dl
 ```
@@ -44,7 +44,14 @@ optional arguments:
 ./blackboard-dl -d -u USERNAME -p PASSWORD
 ```
 
-And now watch it download your lectures & workshops. 
+And now watch it download your lectures & workshops in the terminal or in the background.
+
+## Tests
+
+```
+crystal dep or shards install
+crystal spec
+```
 
 ## Contributing
 

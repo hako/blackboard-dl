@@ -34,7 +34,7 @@ module BlackBoard::Dl
         "registration_id" => "(null)",
       }
 
-      params = HTTP::Params.from_hash(param_data)
+      params = HTTP::Params.encode(param_data)
       res = client.get(SEARCH_HOST + params, headers: HEADERS)
       client.close
       response = XML.parse(res.body.to_s).first_element_child.as(XML::Node)
