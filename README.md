@@ -5,7 +5,7 @@ A small tool to download lectures and workshops automagically because i'm too la
 ![](demo.gif)
 
 ## Requirements
-+ [Crystal 0.23+](https://crystal-lang.org) 
++ [Crystal 0.24.1+](https://crystal-lang.org) 
     +   [Installation Mac/Linux](https://crystal-lang.org) (Sorry Windows users!)
 + Your university must have BlackBoard.
 

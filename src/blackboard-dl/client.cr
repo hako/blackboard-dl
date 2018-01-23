@@ -83,7 +83,7 @@ module BlackBoard::Dl
     def login
       client = HTTP::Client.new URI.parse(@host)
       data = {"username" => @username, "password" => @password}
-      res = client.post_form(LOGIN, headers: HEADERS, form: data)
+      res = client.post(LOGIN, headers: HEADERS, form: data)
       client.close
 
       response = XML.parse(res.body.to_s).first_element_child.as(XML::Node)
