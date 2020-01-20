@@ -166,7 +166,7 @@ module BlackBoard::Dl
 
           # Lecture Materials.
           child.children[3].children[1].children.each do |inner|
-            if inner.type == XML::Type::ELEMENT_NODE
+            if inner.type == XML::Node::Type::ELEMENT_NODE
               if inner.name == "attachments"
                 puts "  [+] #{course_name} lecture avaliable for #{week_name}.".colorize.green.to_s
                 # we need to go deeper.
