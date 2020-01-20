@@ -7,6 +7,8 @@ authors:
 dependencies:
   daemonize:
     github: DougEverly/daemonize.cr
+  readline:
+    github: crystal-lang/crystal-readline
 
 development_dependencies:
   webmock:

@@ -4,6 +4,10 @@ shards:
     github: DougEverly/daemonize.cr
     commit: 03d7da27fe76ee6b77d47a66984969a308a42027
 
+  readline:
+    github: crystal-lang/crystal-readline
+    version: 0.1.0
+
   webmock:
     github: manastech/webmock.cr
     commit: 8c1e360c80479f2708975334061c417332cbe89d
