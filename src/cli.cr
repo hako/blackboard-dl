@@ -88,7 +88,7 @@ module BlackBoard::Dl
 
     Daemonize.daemonize(stdout: stdout_log, stderr: stderr_log, dir: Dir.current)
 
-    now = Time.now
+    now = Time.local
     puts ""
     puts "-Blackboard course downloader daemon ---------------[#{now.to_s("%T")}]"
     diff = now.at_end_of_hour - now
@@ -97,9 +97,9 @@ module BlackBoard::Dl
     until now == now.at_end_of_hour
       puts "Checking for new course material in #{diff.minutes} minute(s)"
       sleep diff.duration
-      puts "Checking new courses at #{Time.now.to_s("%T")}"
+      puts "Checking new courses at #{Time.local.to_s("%T")}"
       download(@@college["url"], bb_username, bb_password)
-      now = Time.now
+      now = Time.local
       diff = now.at_end_of_hour - now
     end
   end
