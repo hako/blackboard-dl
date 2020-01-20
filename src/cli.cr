@@ -30,7 +30,7 @@ module BlackBoard::Dl
     bb_password = Nil
     daemon = false
 
-    OptionParser.parse! do |parser|
+    OptionParser.parse do |parser|
       parser.banner = "usage: blackboard-dl [-h] [-d] [-u USERNAME] [-p PASSWORD] [--version]\n\ndownload course files from blackboard.\n\noptional arguments:"
       parser.on("-u USERNAME", "--username", "Blackboard username") { |username| bb_username = username }
       parser.on("-p PASSWORD", "--password", "Blackboard password") { |password| bb_password = password }
