@@ -227,7 +227,7 @@ module BlackBoard::Dl
 
       # Error handling...
       begin
-        @@college = colleges.at(idx.to_s.to_i)
+        @@college = colleges.values_at(idx.to_s.to_i)[0]
         selected = true
       rescue
         puts "[x] That didn't work, try again...".colorize.red
